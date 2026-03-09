@@ -1,6 +1,6 @@
-import reactLogo from '../../assets/react.svg'
-import viteLogo from '/vite.svg'
-import { CounterCard } from '../../features/counter/CounterCard'
+import reactLogo from "@/assets/react.svg";
+import viteLogo from "/vite.svg";
+import { CounterCard } from "@/features/counter/CounterCard";
 
 export function HomePage() {
   return (
@@ -19,5 +19,5 @@ export function HomePage() {
         Click on the Vite and React logos to learn more
       </p>
     </>
-  )
+  );
 }
