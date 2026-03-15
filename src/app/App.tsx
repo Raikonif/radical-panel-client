@@ -1,14 +1,14 @@
-import "@/App.css";
-import { HomePage } from "@/pages/home/HomePage";
-import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-
-const queryClient = new QueryClient();
+import { BrowserRouter } from "react-router";
+import { AppProviders } from "@/app/providers/AppProviders";
+import { AppRouter } from "@/app/router";
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <HomePage />
-    </QueryClientProvider>
+    <AppProviders>
+      <BrowserRouter>
+        <AppRouter />
+      </BrowserRouter>
+    </AppProviders>
   );
 }
 
