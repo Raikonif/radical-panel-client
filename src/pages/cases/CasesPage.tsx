@@ -9,12 +9,11 @@ import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/features/auth/useAuth";
 import { CaseDetails } from "@/features/cases/CaseDetails";
 import { CaseEditor } from "@/features/cases/CaseEditor";
+import { createCase, deleteCase, updateCase } from "@/features/content/api";
 import {
-  createCase,
-  deleteCase,
-  listCases,
-  updateCase,
-} from "@/features/content/api";
+  casesQueryOptions,
+  contentQueryKeys,
+} from "@/features/content/queries";
 import { formatDate, getCaseTranslation } from "@/features/content/types";
 import type {
   CaseFormValues,
@@ -74,6 +73,7 @@ export function CasesPage() {
   const { user } = useAuth();
   const { t } = useUiLanguage();
   const queryClient = useQueryClient();
+  const userId = user?.id ?? "";
   const [search, setSearch] = useState("");
   const [language, setLanguage] = useState<ContentLanguage>("es");
   const [modalState, setModalState] = useState<CasesModalState>({
@@ -83,13 +83,13 @@ export function CasesPage() {
 
   const {
     data = [],
-    isLoading,
+    isPending,
     error,
   } = useQuery({
-    queryKey: ["cases", user?.id],
-    enabled: Boolean(user?.id),
-    queryFn: () => listCases(user!.id),
+    ...casesQueryOptions(userId),
+    enabled: Boolean(userId),
   });
+  const isInitialLoading = isPending && data.length === 0;
 
   const filteredCases = deferredSearch
     ? data.filter((record) => matchesCase(record, deferredSearch, language))
@@ -101,12 +101,16 @@ export function CasesPage() {
         return updateCase(modalState.record.id, values);
       }
 
-      return createCase(values, user!.id);
+      return createCase(values, userId);
     },
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["cases", user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ["dashboard", user?.id] }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.cases(userId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.dashboard(userId),
+        }),
       ]);
       toast.success(
         modalState.type === "edit"
@@ -128,8 +132,12 @@ export function CasesPage() {
     mutationFn: (record: CaseRecord) => deleteCase(record.id),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["cases", user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ["dashboard", user?.id] }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.cases(userId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.dashboard(userId),
+        }),
       ]);
       toast.success(t.content.cases.deleteSuccess);
       setModalState({ type: "closed" });
@@ -202,7 +210,7 @@ export function CasesPage() {
         searchPlaceholder={t.content.cases.searchPlaceholder}
         onSearchValueChange={setSearch}
         onCreate={() => setModalState({ type: "create" })}
-        isLoading={isLoading}
+        isLoading={isInitialLoading}
         toolbarSlot={
           <ContentLanguageSwitch value={language} onChange={setLanguage} />
         }

@@ -12,9 +12,12 @@ import { PodcastEditor } from "@/features/podcasts/PodcastEditor";
 import {
   createPodcast,
   deletePodcast,
-  listPodcasts,
   updatePodcast,
 } from "@/features/content/api";
+import {
+  contentQueryKeys,
+  podcastsQueryOptions,
+} from "@/features/content/queries";
 import { formatDate, getPodcastTranslation } from "@/features/content/types";
 import type {
   ContentLanguage,
@@ -72,6 +75,7 @@ export function PodcastsPage() {
   const { user } = useAuth();
   const { t } = useUiLanguage();
   const queryClient = useQueryClient();
+  const userId = user?.id ?? "";
   const [search, setSearch] = useState("");
   const [language, setLanguage] = useState<ContentLanguage>("es");
   const [modalState, setModalState] = useState<PodcastsModalState>({
@@ -81,13 +85,13 @@ export function PodcastsPage() {
 
   const {
     data = [],
-    isLoading,
+    isPending,
     error,
   } = useQuery({
-    queryKey: ["podcasts", user?.id],
-    enabled: Boolean(user?.id),
-    queryFn: () => listPodcasts(user!.id),
+    ...podcastsQueryOptions(userId),
+    enabled: Boolean(userId),
   });
+  const isInitialLoading = isPending && data.length === 0;
 
   const filteredPodcasts = deferredSearch
     ? data.filter((record) => matchesPodcast(record, deferredSearch, language))
@@ -99,12 +103,16 @@ export function PodcastsPage() {
         return updatePodcast(modalState.record.id, values);
       }
 
-      return createPodcast(values, user!.id);
+      return createPodcast(values, userId);
     },
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["podcasts", user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ["dashboard", user?.id] }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.podcasts(userId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.dashboard(userId),
+        }),
       ]);
       toast.success(
         modalState.type === "edit"
@@ -126,8 +134,12 @@ export function PodcastsPage() {
     mutationFn: (record: PodcastRecord) => deletePodcast(record.id),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["podcasts", user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ["dashboard", user?.id] }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.podcasts(userId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.dashboard(userId),
+        }),
       ]);
       toast.success(t.content.podcasts.deleteSuccess);
       setModalState({ type: "closed" });
@@ -193,7 +205,7 @@ export function PodcastsPage() {
         searchPlaceholder={t.content.podcasts.searchPlaceholder}
         onSearchValueChange={setSearch}
         onCreate={() => setModalState({ type: "create" })}
-        isLoading={isLoading}
+        isLoading={isInitialLoading}
         toolbarSlot={
           <ContentLanguageSwitch value={language} onChange={setLanguage} />
         }

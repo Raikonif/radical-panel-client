@@ -16,7 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAuth } from "@/features/auth/useAuth";
-import { getDashboardData } from "@/features/content/api";
+import { dashboardQueryOptions } from "@/features/content/queries";
 import {
   formatDate,
   getPrimaryCaseTranslation,
@@ -122,12 +122,14 @@ function RecentCard({
 export function DashboardPage() {
   const { user } = useAuth();
   const { t } = useUiLanguage();
+  const userId = user?.id ?? "";
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["dashboard", user?.id],
-    enabled: Boolean(user?.id),
-    queryFn: () => getDashboardData(user!.id),
+  const { data, isPending, error } = useQuery({
+    ...dashboardQueryOptions(userId),
+    enabled: Boolean(userId),
   });
+
+  const isInitialLoading = isPending && !data;
 
   if (error) {
     return (
@@ -218,22 +220,22 @@ export function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label={t.dashboard.stats.cases.label}
-          value={isLoading ? 0 : (data?.counts.cases ?? 0)}
+          value={isInitialLoading ? 0 : (data?.counts.cases ?? 0)}
           detail={t.dashboard.stats.cases.detail}
         />
         <StatCard
           label={t.dashboard.stats.videos.label}
-          value={isLoading ? 0 : (data?.counts.videos ?? 0)}
+          value={isInitialLoading ? 0 : (data?.counts.videos ?? 0)}
           detail={t.dashboard.stats.videos.detail}
         />
         <StatCard
           label={t.dashboard.stats.podcasts.label}
-          value={isLoading ? 0 : (data?.counts.podcasts ?? 0)}
+          value={isInitialLoading ? 0 : (data?.counts.podcasts ?? 0)}
           detail={t.dashboard.stats.podcasts.detail}
         />
         <StatCard
           label={t.dashboard.stats.activeTranslations.label}
-          value={isLoading ? 0 : (data?.counts.activeTranslations ?? 0)}
+          value={isInitialLoading ? 0 : (data?.counts.activeTranslations ?? 0)}
           detail={`${data?.counts.caseImages ?? 0} ${t.dashboard.stats.activeTranslations.detailSuffix}`}
         />
       </div>

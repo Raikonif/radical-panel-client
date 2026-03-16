@@ -9,12 +9,11 @@ import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/features/auth/useAuth";
 import { VideoDetails } from "@/features/videos/VideoDetails";
 import { VideoEditor } from "@/features/videos/VideoEditor";
+import { createVideo, deleteVideo, updateVideo } from "@/features/content/api";
 import {
-  createVideo,
-  deleteVideo,
-  listVideos,
-  updateVideo,
-} from "@/features/content/api";
+  contentQueryKeys,
+  videosQueryOptions,
+} from "@/features/content/queries";
 import { formatDate, getVideoTranslation } from "@/features/content/types";
 import type {
   ContentLanguage,
@@ -71,6 +70,7 @@ export function VideosPage() {
   const { user } = useAuth();
   const { t } = useUiLanguage();
   const queryClient = useQueryClient();
+  const userId = user?.id ?? "";
   const [search, setSearch] = useState("");
   const [language, setLanguage] = useState<ContentLanguage>("es");
   const [modalState, setModalState] = useState<VideosModalState>({
@@ -80,13 +80,13 @@ export function VideosPage() {
 
   const {
     data = [],
-    isLoading,
+    isPending,
     error,
   } = useQuery({
-    queryKey: ["videos", user?.id],
-    enabled: Boolean(user?.id),
-    queryFn: () => listVideos(user!.id),
+    ...videosQueryOptions(userId),
+    enabled: Boolean(userId),
   });
+  const isInitialLoading = isPending && data.length === 0;
 
   const filteredVideos = deferredSearch
     ? data.filter((record) => matchesVideo(record, deferredSearch, language))
@@ -98,12 +98,16 @@ export function VideosPage() {
         return updateVideo(modalState.record.id, values);
       }
 
-      return createVideo(values, user!.id);
+      return createVideo(values, userId);
     },
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["videos", user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ["dashboard", user?.id] }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.videos(userId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.dashboard(userId),
+        }),
       ]);
       toast.success(
         modalState.type === "edit"
@@ -125,8 +129,12 @@ export function VideosPage() {
     mutationFn: (record: VideoRecord) => deleteVideo(record.id),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["videos", user?.id] }),
-        queryClient.invalidateQueries({ queryKey: ["dashboard", user?.id] }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.videos(userId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: contentQueryKeys.dashboard(userId),
+        }),
       ]);
       toast.success(t.content.videos.deleteSuccess);
       setModalState({ type: "closed" });
@@ -194,7 +202,7 @@ export function VideosPage() {
         searchPlaceholder={t.content.videos.searchPlaceholder}
         onSearchValueChange={setSearch}
         onCreate={() => setModalState({ type: "create" })}
-        isLoading={isLoading}
+        isLoading={isInitialLoading}
         toolbarSlot={
           <ContentLanguageSwitch value={language} onChange={setLanguage} />
         }

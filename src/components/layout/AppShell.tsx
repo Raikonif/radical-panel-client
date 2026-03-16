@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ComponentType } from "react";
 import {
   Broadcast,
@@ -7,11 +7,19 @@ import {
   SignOut,
   VideoCamera,
 } from "@phosphor-icons/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { NavLink, useLocation, useOutlet } from "react-router";
 import { toast } from "sonner";
 import { UiLanguageSwitch } from "@/components/layout/UiLanguageSwitch";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/useAuth";
+import {
+  casesQueryOptions,
+  dashboardQueryOptions,
+  podcastsQueryOptions,
+  prefetchContentQueries,
+  videosQueryOptions,
+} from "@/features/content/queries";
 import { useUiLanguage } from "@/features/i18n/useUiLanguage";
 import { ThemeModeSwitch } from "@/components/layout/ThemeModeSwitch";
 import { cn } from "@/lib/utils";
@@ -21,6 +29,7 @@ type NavigationItem = {
   label: string;
   icon: ComponentType<{ className?: string }>;
   description: string;
+  preload: () => Promise<unknown>;
 };
 
 function NavigationLink({
@@ -28,10 +37,13 @@ function NavigationLink({
   label,
   description,
   icon: Icon,
+  preload,
 }: NavigationItem) {
   return (
     <NavLink
       to={href}
+      onMouseEnter={() => void preload()}
+      onFocus={() => void preload()}
       className={({ isActive }) =>
         cn(
           "group flex items-start gap-2.5 rounded-[1.35rem] border px-3 py-2.5 text-left transition-all",
@@ -58,10 +70,13 @@ function MobileNavigationCard({
   href,
   label,
   icon: Icon,
-}: Pick<NavigationItem, "href" | "label" | "icon">) {
+  preload,
+}: Pick<NavigationItem, "href" | "label" | "icon" | "preload">) {
   return (
     <NavLink
       to={href}
+      onMouseEnter={() => void preload()}
+      onFocus={() => void preload()}
       className={({ isActive }) =>
         cn(
           "flex items-center gap-2.5 rounded-[1.15rem] border px-3 py-2.5 text-left transition-all",
@@ -84,6 +99,8 @@ export function AppShell() {
   const outlet = useOutlet();
   const { signOut, user } = useAuth();
   const { locale, t } = useUiLanguage();
+  const queryClient = useQueryClient();
+  const userId = user?.id ?? "";
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const navigationItems: NavigationItem[] = [
@@ -92,26 +109,72 @@ export function AppShell() {
       label: t.shell.nav.dashboard.label,
       icon: HouseLine,
       description: t.shell.nav.dashboard.description,
+      preload: async () => {
+        await Promise.all([
+          import("@/pages/dashboard/DashboardPage"),
+          userId
+            ? queryClient.prefetchQuery(dashboardQueryOptions(userId))
+            : Promise.resolve(),
+        ]);
+      },
     },
     {
       href: "/cases",
       label: t.shell.nav.cases.label,
       icon: Microscope,
       description: t.shell.nav.cases.description,
+      preload: async () => {
+        await Promise.all([
+          import("@/pages/cases/CasesPage"),
+          userId
+            ? queryClient.prefetchQuery(casesQueryOptions(userId))
+            : Promise.resolve(),
+        ]);
+      },
     },
     {
       href: "/videos",
       label: t.shell.nav.videos.label,
       icon: VideoCamera,
       description: t.shell.nav.videos.description,
+      preload: async () => {
+        await Promise.all([
+          import("@/pages/videos/VideosPage"),
+          userId
+            ? queryClient.prefetchQuery(videosQueryOptions(userId))
+            : Promise.resolve(),
+        ]);
+      },
     },
     {
       href: "/podcasts",
       label: t.shell.nav.podcasts.label,
       icon: Broadcast,
       description: t.shell.nav.podcasts.description,
+      preload: async () => {
+        await Promise.all([
+          import("@/pages/podcasts/PodcastsPage"),
+          userId
+            ? queryClient.prefetchQuery(podcastsQueryOptions(userId))
+            : Promise.resolve(),
+        ]);
+      },
     },
   ];
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    void Promise.allSettled([
+      import("@/pages/dashboard/DashboardPage"),
+      import("@/pages/cases/CasesPage"),
+      import("@/pages/videos/VideosPage"),
+      import("@/pages/podcasts/PodcastsPage"),
+      prefetchContentQueries(queryClient, userId),
+    ]);
+  }, [queryClient, userId]);
 
   const activeLabel =
     navigationItems.find((item) => pathname.startsWith(item.href))?.label ??
