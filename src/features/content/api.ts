@@ -80,7 +80,7 @@ type RawPodcastRow = {
   created_at: string;
   updated_at: string | null;
   file_url: string | null;
-  uder_id: string | null;
+  user_id: string | null;
   is_active: boolean | null;
 };
 
@@ -138,7 +138,7 @@ const PODCAST_SELECT = `
   created_at,
   updated_at,
   file_url,
-  uder_id,
+  user_id,
   is_active
 `;
 
@@ -250,7 +250,7 @@ function mapPodcastRecord(
     created_at: row.created_at,
     updated_at: row.updated_at,
     file_url: row.file_url ?? "",
-    uder_id: row.uder_id,
+    user_id: row.user_id,
     is_active: row.is_active ?? false,
     translations: translations.map(mapPodcastTranslation),
   };
@@ -422,10 +422,11 @@ async function writeCaseChildren(
   caseId: number,
   payload: CaseFormValues,
   timestamp: string,
+  userId: string,
 ) {
   await Promise.all([
-    upsertCaseTranslation(caseId, payload.translation, timestamp),
-    writeCaseImages(caseId, payload.images, timestamp),
+    upsertCaseTranslation(caseId, payload.translation, timestamp, userId),
+    writeCaseImages(caseId, payload.images, timestamp, userId),
   ]);
 }
 
@@ -433,6 +434,7 @@ async function writeCaseImages(
   caseId: number,
   images: CaseFormValues["images"],
   timestamp: string,
+  userId: string,
 ) {
   if (images.length === 0) {
     return;
@@ -443,6 +445,7 @@ async function writeCaseImages(
     .insert(
       images.map((image) => ({
         case_id: caseId,
+        user_id: userId,
         updated_at: timestamp,
         image_url: image.image_url,
         type: image.type,
@@ -474,6 +477,7 @@ async function upsertCaseTranslation(
   caseId: number,
   translation: CaseFormValues["translation"],
   timestamp: string,
+  userId: string,
 ) {
   const translationId = await findTranslationId(
     "cases_translations",
@@ -487,6 +491,7 @@ async function upsertCaseTranslation(
       .from("cases_translations")
       .update({
         updated_at: timestamp,
+        user_id: userId,
         language: translation.language,
         title: translation.title,
         description: translation.description,
@@ -505,6 +510,7 @@ async function upsertCaseTranslation(
     .from("cases_translations")
     .insert({
       case_id: caseId,
+      user_id: userId,
       updated_at: timestamp,
       language: translation.language,
       title: translation.title,
@@ -522,6 +528,7 @@ async function upsertVideoTranslation(
   videoId: number,
   translation: VideoFormValues["translation"],
   timestamp: string,
+  userId: string,
 ) {
   const translationId = await findTranslationId(
     "videos_translations",
@@ -535,6 +542,7 @@ async function upsertVideoTranslation(
       .from("videos_translations")
       .update({
         updated_at: timestamp,
+        user_id: userId,
         language: translation.language,
         name: translation.name,
         description: translation.description,
@@ -550,6 +558,7 @@ async function upsertVideoTranslation(
     .from("videos_translations")
     .insert({
       video_id: videoId,
+      user_id: userId,
       updated_at: timestamp,
       language: translation.language,
       name: translation.name,
@@ -564,6 +573,7 @@ async function upsertPodcastTranslation(
   podcastId: number,
   translation: PodcastFormValues["translation"],
   timestamp: string,
+  userId: string,
 ) {
   const translationId = await findTranslationId(
     "podcasts_translations",
@@ -577,6 +587,7 @@ async function upsertPodcastTranslation(
       .from("podcasts_translations")
       .update({
         updated_at: timestamp,
+        user_id: userId,
         language: translation.language,
         title: translation.title,
         body: translation.body,
@@ -593,6 +604,7 @@ async function upsertPodcastTranslation(
     .from("podcasts_translations")
     .insert({
       podcast_id: podcastId,
+      user_id: userId,
       updated_at: timestamp,
       language: translation.language,
       title: translation.title,
@@ -661,7 +673,7 @@ export async function createCase(payload: CaseFormValues, userId: string) {
   ensureNoError(error);
 
   const caseId = (data as { id: number }).id;
-  await writeCaseChildren(caseId, payload, timestamp);
+  await writeCaseChildren(caseId, payload, timestamp, userId);
 
   return fetchCaseById(caseId);
 }
@@ -673,18 +685,23 @@ export async function getCaseById(caseId: number) {
 export async function saveCaseTranslation(
   caseId: number,
   translation: CaseFormValues["translation"],
+  userId: string,
 ) {
   const timestamp = new Date().toISOString();
 
   await Promise.all([
     touchRecord("cases", caseId, timestamp),
-    upsertCaseTranslation(caseId, translation, timestamp),
+    upsertCaseTranslation(caseId, translation, timestamp, userId),
   ]);
 
   return fetchCaseById(caseId);
 }
 
-export async function updateCase(caseId: number, payload: CaseFormValues) {
+export async function updateCase(
+  caseId: number,
+  payload: CaseFormValues,
+  userId: string,
+) {
   const client = getSupabaseClient();
   const timestamp = new Date().toISOString();
 
@@ -696,23 +713,19 @@ export async function updateCase(caseId: number, payload: CaseFormValues) {
   ensureNoError(caseUpdate.error);
   ensureNoError(imagesDelete.error);
 
-  await writeCaseChildren(caseId, payload, timestamp);
+  await writeCaseChildren(caseId, payload, timestamp, userId);
 
   return fetchCaseById(caseId);
 }
 
 export async function deleteCase(caseId: number) {
-  const client = getSupabaseClient();
-  const [translationsDelete, imagesDelete] = await Promise.all([
-    client.from("cases_translations").delete().eq("case_id", caseId),
-    client.from("images_cases").delete().eq("case_id", caseId),
-  ]);
+  const { error } = await getSupabaseClient().functions.invoke("delete-case", {
+    body: { caseId },
+  });
 
-  ensureNoError(translationsDelete.error);
-  ensureNoError(imagesDelete.error);
-
-  const { error } = await client.from("cases").delete().eq("id", caseId);
-  ensureNoError(error);
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 export async function listVideos(userId: string) {
@@ -761,7 +774,7 @@ export async function createVideo(payload: VideoFormValues, userId: string) {
   ensureNoError(error);
 
   const videoId = (data as { id: number }).id;
-  await upsertVideoTranslation(videoId, payload.translation, timestamp);
+  await upsertVideoTranslation(videoId, payload.translation, timestamp, userId);
 
   return fetchVideoById(videoId);
 }
@@ -773,18 +786,23 @@ export async function getVideoById(videoId: number) {
 export async function saveVideoTranslation(
   videoId: number,
   translation: VideoFormValues["translation"],
+  userId: string,
 ) {
   const timestamp = new Date().toISOString();
 
   await Promise.all([
     touchRecord("videos", videoId, timestamp),
-    upsertVideoTranslation(videoId, translation, timestamp),
+    upsertVideoTranslation(videoId, translation, timestamp, userId),
   ]);
 
   return fetchVideoById(videoId);
 }
 
-export async function updateVideo(videoId: number, payload: VideoFormValues) {
+export async function updateVideo(
+  videoId: number,
+  payload: VideoFormValues,
+  userId: string,
+) {
   const client = getSupabaseClient();
   const timestamp = new Date().toISOString();
 
@@ -798,7 +816,7 @@ export async function updateVideo(videoId: number, payload: VideoFormValues) {
 
   ensureNoError(videoUpdateError);
 
-  await upsertVideoTranslation(videoId, payload.translation, timestamp);
+  await upsertVideoTranslation(videoId, payload.translation, timestamp, userId);
 
   return fetchVideoById(videoId);
 }
@@ -820,7 +838,7 @@ export async function listPodcasts(userId: string) {
   const { data, error } = await client
     .from("podcasts")
     .select(PODCAST_SELECT)
-    .eq("uder_id", userId)
+    .eq("user_id", userId)
     .order("updated_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
 
@@ -855,7 +873,7 @@ export async function createPodcast(
   const { data, error } = await getSupabaseClient()
     .from("podcasts")
     .insert({
-      uder_id: userId,
+      user_id: userId,
       file_url: payload.file_url,
       is_active: payload.is_active,
       updated_at: timestamp,
@@ -866,7 +884,12 @@ export async function createPodcast(
   ensureNoError(error);
 
   const podcastId = (data as { id: number }).id;
-  await upsertPodcastTranslation(podcastId, payload.translation, timestamp);
+  await upsertPodcastTranslation(
+    podcastId,
+    payload.translation,
+    timestamp,
+    userId,
+  );
 
   return fetchPodcastById(podcastId);
 }
@@ -878,12 +901,13 @@ export async function getPodcastById(podcastId: number) {
 export async function savePodcastTranslation(
   podcastId: number,
   translation: PodcastFormValues["translation"],
+  userId: string,
 ) {
   const timestamp = new Date().toISOString();
 
   await Promise.all([
     touchRecord("podcasts", podcastId, timestamp),
-    upsertPodcastTranslation(podcastId, translation, timestamp),
+    upsertPodcastTranslation(podcastId, translation, timestamp, userId),
   ]);
 
   return fetchPodcastById(podcastId);
@@ -892,6 +916,7 @@ export async function savePodcastTranslation(
 export async function updatePodcast(
   podcastId: number,
   payload: PodcastFormValues,
+  userId: string,
 ) {
   const client = getSupabaseClient();
   const timestamp = new Date().toISOString();
@@ -907,7 +932,12 @@ export async function updatePodcast(
 
   ensureNoError(podcastUpdateError);
 
-  await upsertPodcastTranslation(podcastId, payload.translation, timestamp);
+  await upsertPodcastTranslation(
+    podcastId,
+    payload.translation,
+    timestamp,
+    userId,
+  );
 
   return fetchPodcastById(podcastId);
 }

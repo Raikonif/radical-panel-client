@@ -21,6 +21,31 @@ function toDeepLTargetLanguage(language: ContentLanguage) {
   return language === "es" ? "ES" : "EN-US";
 }
 
+function normalizeDeepLApiDomain(apiDomain: string | null, authKey: string) {
+  const fallbackDomain = authKey.endsWith(":fx")
+    ? "https://api-free.deepl.com"
+    : "https://api.deepl.com";
+
+  if (!apiDomain) {
+    return fallbackDomain;
+  }
+
+  const trimmedDomain = apiDomain.trim();
+
+  if (trimmedDomain.length === 0) {
+    return fallbackDomain;
+  }
+
+  if (
+    trimmedDomain.startsWith("http://") ||
+    trimmedDomain.startsWith("https://")
+  ) {
+    return trimmedDomain;
+  }
+
+  return `https://${trimmedDomain}`;
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -34,29 +59,28 @@ Deno.serve(async (request) => {
       throw new Error("Missing DEEP_API_KEY.");
     }
 
-    if (!apiDomain) {
-      throw new Error("Missing DEEP_API_DOMAIN.");
-    }
-
     const payload = (await request.json()) as TranslateRequest;
 
     if (!Array.isArray(payload.texts) || payload.texts.length === 0) {
       throw new Error("Missing texts.");
     }
 
-    const response = await fetch(`${apiDomain}/v2/translate`, {
-      method: "POST",
-      headers: {
-        Authorization: `DeepL-Auth-Key ${authKey}`,
-        "Content-Type": "application/json",
+    const response = await fetch(
+      `${normalizeDeepLApiDomain(apiDomain, authKey)}/v2/translate`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `DeepL-Auth-Key ${authKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: payload.texts,
+          source_lang: toDeepLSourceLanguage(payload.sourceLanguage),
+          target_lang: toDeepLTargetLanguage(payload.targetLanguage),
+          context: payload.context,
+        }),
       },
-      body: JSON.stringify({
-        text: payload.texts,
-        source_lang: toDeepLSourceLanguage(payload.sourceLanguage),
-        target_lang: toDeepLTargetLanguage(payload.targetLanguage),
-        context: payload.context,
-      }),
-    });
+    );
 
     const data = await response.json();
 

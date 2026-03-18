@@ -136,7 +136,7 @@ export function useCasesCrud(userId: string) {
 
   const updateCaseMutation = useMutation({
     mutationFn: ({ record, values }: UpdateCaseInput) =>
-      updateCase(record.id, values),
+      updateCase(record.id, values, userId),
     onSuccess: (nextRecord, { record }) => {
       queryClient.setQueryData<CaseRecord[]>(casesKey, (records = []) =>
         upsertCaseRecord(records, nextRecord),

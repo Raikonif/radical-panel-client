@@ -101,7 +101,7 @@ export function VideosPage() {
     mutationFn: async (values: VideoFormValues) => {
       if (modalState.type === "edit") {
         return {
-          record: await updateVideo(modalState.record.id, values),
+          record: await updateVideo(modalState.record.id, values, userId),
           translationCreated: false,
         };
       }

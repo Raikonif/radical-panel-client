@@ -102,7 +102,7 @@ export function PodcastsPage() {
     mutationFn: async (values: PodcastFormValues) => {
       if (modalState.type === "edit") {
         return {
-          record: await updatePodcast(modalState.record.id, values),
+          record: await updatePodcast(modalState.record.id, values, userId),
           translationCreated: false,
         };
       }

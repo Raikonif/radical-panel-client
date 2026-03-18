@@ -29,11 +29,16 @@ export type AutoTranslatedCreateResult<TRecord> = {
 };
 
 function buildTranslationContext(parts: Array<string>) {
-  return parts.map((part) => part.trim()).filter(Boolean).join("\n\n");
+  return parts
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 async function translateCasePayload(payload: CaseFormValues) {
-  const targetLanguage = getAlternateContentLanguage(payload.translation.language);
+  const targetLanguage = getAlternateContentLanguage(
+    payload.translation.language,
+  );
   const [title, description, diagnosis, complexity, specimen] =
     await translateTexts({
       sourceLanguage: payload.translation.language,
@@ -64,7 +69,9 @@ async function translateCasePayload(payload: CaseFormValues) {
 }
 
 async function translateVideoPayload(payload: VideoFormValues) {
-  const targetLanguage = getAlternateContentLanguage(payload.translation.language);
+  const targetLanguage = getAlternateContentLanguage(
+    payload.translation.language,
+  );
   const [name, description] = await translateTexts({
     sourceLanguage: payload.translation.language,
     targetLanguage,
@@ -81,7 +88,9 @@ async function translateVideoPayload(payload: VideoFormValues) {
 }
 
 async function translatePodcastPayload(payload: PodcastFormValues) {
-  const targetLanguage = getAlternateContentLanguage(payload.translation.language);
+  const targetLanguage = getAlternateContentLanguage(
+    payload.translation.language,
+  );
   const [title, body] = await translateTexts({
     sourceLanguage: payload.translation.language,
     targetLanguage,
@@ -109,7 +118,7 @@ export async function createCaseWithAutoTranslation(
 
   try {
     const translation = await translateCasePayload(payload);
-    await saveCaseTranslation(record.id, translation);
+    await saveCaseTranslation(record.id, translation, userId);
 
     return {
       record: await getCaseById(record.id),
@@ -133,7 +142,7 @@ export async function createVideoWithAutoTranslation(
 
   try {
     const translation = await translateVideoPayload(payload);
-    await saveVideoTranslation(record.id, translation);
+    await saveVideoTranslation(record.id, translation, userId);
 
     return {
       record: await getVideoById(record.id),
@@ -157,7 +166,7 @@ export async function createPodcastWithAutoTranslation(
 
   try {
     const translation = await translatePodcastPayload(payload);
-    await savePodcastTranslation(record.id, translation);
+    await savePodcastTranslation(record.id, translation, userId);
 
     return {
       record: await getPodcastById(record.id),

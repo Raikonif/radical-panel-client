@@ -65,7 +65,7 @@ export type PodcastRecord = {
   created_at: string;
   updated_at: string | null;
   file_url: string;
-  uder_id: string | null;
+  user_id: string | null;
   is_active: boolean;
   translations: PodcastTranslation[];
 };
