@@ -289,7 +289,11 @@ export function PodcastsPage() {
             onLanguageChange={setEditorLanguage}
             isPending={saveMutation.isPending}
             onSave={async (values) => {
-              await saveMutation.mutateAsync(values);
+              try {
+                await saveMutation.mutateAsync(values);
+              } catch {
+                // Mutation toasts are handled in the page-level callbacks.
+              }
             }}
           />
         ) : null}
@@ -301,7 +305,11 @@ export function PodcastsPage() {
             onLanguageChange={setEditorLanguage}
             isPending={saveMutation.isPending}
             onSave={async (values) => {
-              await saveMutation.mutateAsync(values);
+              try {
+                await saveMutation.mutateAsync(values);
+              } catch {
+                // Mutation toasts are handled in the page-level callbacks.
+              }
             }}
           />
         ) : null}

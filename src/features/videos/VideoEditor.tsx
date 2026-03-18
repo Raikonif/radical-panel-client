@@ -1,7 +1,8 @@
-import { FilmSlate, Trash } from "@phosphor-icons/react";
+import { FilmSlate, Trash, UploadSimple } from "@phosphor-icons/react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
 import { ContentLanguageSwitch } from "@/components/workspace/ContentLanguageSwitch";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import { FormMessage } from "@/components/ui/form-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { uploadMediaFile } from "@/features/content/upload";
 import { formatDate, getVideoTranslation } from "@/features/content/types";
 import type {
   ContentLanguage,
@@ -30,7 +32,7 @@ const languageLabels: Record<ContentLanguage, string> = {
 };
 
 const videoSchema = z.object({
-  file_url: z.string().trim().min(1, "Agrega la URL o ruta del video."),
+  file_url: z.string().trim(),
   translation: z.object({
     language: z.enum(["es", "en"]),
     name: z.string().trim().min(3, "Escribe un nombre claro."),
@@ -77,6 +79,8 @@ export function VideoEditor({
   onSave,
   onDelete,
 }: VideoEditorProps) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const form = useForm<VideoEditorValues>({
     resolver: zodResolver(videoSchema),
     defaultValues: getDefaultValues(record, language),
@@ -84,6 +88,7 @@ export function VideoEditor({
 
   useEffect(() => {
     form.reset(getDefaultValues(record, language));
+    setSelectedFile(null);
   }, [form, language, record]);
 
   const errors = form.formState.errors;
@@ -107,6 +112,37 @@ export function VideoEditor({
 
     await onDelete();
   }
+
+  async function handleSubmit(values: VideoEditorValues) {
+    if (!selectedFile && !values.file_url.trim()) {
+      form.setError("file_url", {
+        type: "manual",
+        message: "Agrega la URL o ruta del video, o selecciona un archivo.",
+      });
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+
+      const file_url = selectedFile
+        ? (await uploadMediaFile(selectedFile, "videos")).url
+        : values.file_url;
+
+      await onSave({
+        ...values,
+        file_url,
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo subir el video.",
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  const isBusy = isPending || isUploading;
 
   return (
     <Card className="overflow-hidden">
@@ -170,7 +206,7 @@ export function VideoEditor({
       <CardContent className="p-6">
         <form
           className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]"
-          onSubmit={form.handleSubmit(onSave)}
+          onSubmit={form.handleSubmit(handleSubmit)}
           noValidate
         >
           <div className="space-y-6">
@@ -187,14 +223,39 @@ export function VideoEditor({
 
               <div className="grid gap-5">
                 <div>
-                  <Label htmlFor="video-file-url">Archivo o URL</Label>
+                  <Label htmlFor="video-file-url">Archivo, URL o ruta</Label>
                   <Input
                     id="video-file-url"
                     className="mt-2"
-                    placeholder="https://..."
+                    placeholder="videos/mi-archivo.mp4"
                     {...form.register("file_url")}
                   />
                   <FormMessage>{errors.file_url?.message}</FormMessage>
+
+                  <div className="mt-3 rounded-2xl border border-dashed border-border/70 bg-card/70 p-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <UploadSimple className="size-4 text-primary" />
+                      <Label htmlFor="video-upload-file">Subir archivo</Label>
+                    </div>
+                    <Input
+                      id="video-upload-file"
+                      className="mt-2"
+                      type="file"
+                      accept="video/*"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        setSelectedFile(file);
+                        if (file) {
+                          form.clearErrors("file_url");
+                        }
+                      }}
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {selectedFile
+                        ? `Se subira ${selectedFile.name} al guardar en radical-panel/videos/.`
+                        : "Si eliges un archivo, al guardar reemplazara la ruta actual con la clave devuelta por /upload."}
+                    </p>
+                  </div>
                 </div>
 
                 <div>
@@ -252,10 +313,12 @@ export function VideoEditor({
                   type="submit"
                   size="lg"
                   className="w-full justify-center"
-                  disabled={isPending}
+                  disabled={isBusy}
                 >
-                  {isPending
-                    ? "Guardando..."
+                  {isBusy
+                    ? isUploading
+                      ? "Subiendo archivo..."
+                      : "Guardando..."
                     : mode === "create"
                       ? "Crear video"
                       : "Guardar cambios"}
@@ -265,8 +328,11 @@ export function VideoEditor({
                   variant="outline"
                   size="lg"
                   className="w-full justify-center"
-                  onClick={() => form.reset(getDefaultValues(record, language))}
-                  disabled={isPending}
+                  onClick={() => {
+                    form.reset(getDefaultValues(record, language));
+                    setSelectedFile(null);
+                  }}
+                  disabled={isBusy}
                 >
                   Restablecer formulario
                 </Button>
@@ -277,7 +343,7 @@ export function VideoEditor({
                     size="lg"
                     className="w-full justify-center"
                     onClick={handleDelete}
-                    disabled={isPending}
+                    disabled={isBusy}
                   >
                     <Trash className="size-4" />
                     Eliminar video

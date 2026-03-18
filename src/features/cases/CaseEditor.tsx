@@ -1,7 +1,8 @@
-import { ImageSquare, Plus, Trash } from "@phosphor-icons/react";
+import { ImageSquare, Plus, Trash, UploadSimple } from "@phosphor-icons/react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
 import { ContentLanguageSwitch } from "@/components/workspace/ContentLanguageSwitch";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import { FormMessage } from "@/components/ui/form-message";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { uploadMediaFile } from "@/features/content/upload";
 import { formatDate, getCaseTranslation } from "@/features/content/types";
 import type {
   CaseFormValues,
@@ -41,7 +43,7 @@ const caseSchema = z.object({
   }),
   images: z.array(
     z.object({
-      image_url: z.string().trim().min(1, "Agrega la URL o ruta de la imagen."),
+      image_url: z.string().trim(),
       type: z.string().trim().min(1, "Indica el tipo de imagen."),
     }),
   ),
@@ -92,6 +94,10 @@ export function CaseEditor({
   onSave,
   onDelete,
 }: CaseEditorProps) {
+  const [pendingImageFiles, setPendingImageFiles] = useState<
+    Array<File | null>
+  >([]);
+  const [isUploading, setIsUploading] = useState(false);
   const form = useForm<CaseEditorValues>({
     resolver: zodResolver(caseSchema),
     defaultValues: getDefaultValues(record, language),
@@ -99,6 +105,7 @@ export function CaseEditor({
 
   useEffect(() => {
     form.reset(getDefaultValues(record, language));
+    setPendingImageFiles(record?.images.map(() => null) ?? []);
   }, [form, language, record]);
 
   const imagesFieldArray = useFieldArray({
@@ -127,6 +134,56 @@ export function CaseEditor({
 
     await onDelete();
   }
+
+  async function handleSubmit(values: CaseEditorValues) {
+    const missingImageUrlIndex = values.images.findIndex(
+      (image, index) => !image.image_url.trim() && !pendingImageFiles[index],
+    );
+
+    if (missingImageUrlIndex >= 0) {
+      form.setError(`images.${missingImageUrlIndex}.image_url`, {
+        type: "manual",
+        message: "Agrega la URL o ruta de la imagen, o selecciona un archivo.",
+      });
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+
+      const images = await Promise.all(
+        values.images.map(async (image, index) => {
+          const file = pendingImageFiles[index];
+
+          if (!file) {
+            return image;
+          }
+
+          const upload = await uploadMediaFile(file, "cases");
+
+          return {
+            ...image,
+            image_url: upload.url,
+          };
+        }),
+      );
+
+      await onSave({
+        ...values,
+        images,
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron subir las imagenes.",
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  const isBusy = isPending || isUploading;
 
   return (
     <Card className="overflow-hidden">
@@ -191,7 +248,7 @@ export function CaseEditor({
       <CardContent className="p-6">
         <form
           className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]"
-          onSubmit={form.handleSubmit(onSave)}
+          onSubmit={form.handleSubmit(handleSubmit)}
           noValidate
         >
           <div className="space-y-6">
@@ -298,9 +355,10 @@ export function CaseEditor({
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() =>
-                    imagesFieldArray.append({ image_url: "", type: "" })
-                  }
+                  onClick={() => {
+                    imagesFieldArray.append({ image_url: "", type: "" });
+                    setPendingImageFiles((current) => [...current, null]);
+                  }}
                 >
                   <Plus className="size-4" />
                   Agregar imagen
@@ -328,7 +386,14 @@ export function CaseEditor({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => imagesFieldArray.remove(index)}
+                        onClick={() => {
+                          imagesFieldArray.remove(index);
+                          setPendingImageFiles((current) =>
+                            current.filter(
+                              (_, fileIndex) => fileIndex !== index,
+                            ),
+                          );
+                        }}
                       >
                         <Trash className="size-4" />
                         Quitar
@@ -343,7 +408,7 @@ export function CaseEditor({
                         <Input
                           id={`case-image-url-${index}`}
                           className="mt-2"
-                          placeholder="https://..."
+                          placeholder="cases/imagen-clinica.jpg"
                           {...form.register(
                             `images.${index}.image_url` as const,
                           )}
@@ -351,6 +416,35 @@ export function CaseEditor({
                         <FormMessage>
                           {errors.images?.[index]?.image_url?.message}
                         </FormMessage>
+
+                        <div className="mt-3 rounded-2xl border border-dashed border-border/70 bg-background/80 p-3">
+                          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                            <UploadSimple className="size-4 text-primary" />
+                            <span>Subir imagen</span>
+                          </div>
+                          <Input
+                            id={`case-image-file-${index}`}
+                            className="mt-2"
+                            type="file"
+                            accept="image/*"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0] ?? null;
+                              setPendingImageFiles((current) => {
+                                const next = [...current];
+                                next[index] = file;
+                                return next;
+                              });
+                              if (file) {
+                                form.clearErrors(`images.${index}.image_url`);
+                              }
+                            }}
+                          />
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            {pendingImageFiles[index]
+                              ? `Se subira ${pendingImageFiles[index]?.name} al guardar en radical-panel/cases/.`
+                              : "Si eliges un archivo, al guardar reemplazara la ruta actual con la clave devuelta por /upload."}
+                          </p>
+                        </div>
                       </div>
 
                       <div>
@@ -387,10 +481,12 @@ export function CaseEditor({
                   type="submit"
                   size="lg"
                   className="w-full justify-center"
-                  disabled={isPending}
+                  disabled={isBusy}
                 >
-                  {isPending
-                    ? "Guardando..."
+                  {isBusy
+                    ? isUploading
+                      ? "Subiendo archivos..."
+                      : "Guardando..."
                     : mode === "create"
                       ? "Crear caso"
                       : "Guardar cambios"}
@@ -400,8 +496,11 @@ export function CaseEditor({
                   variant="outline"
                   size="lg"
                   className="w-full justify-center"
-                  onClick={() => form.reset(getDefaultValues(record, language))}
-                  disabled={isPending}
+                  onClick={() => {
+                    form.reset(getDefaultValues(record, language));
+                    setPendingImageFiles(record?.images.map(() => null) ?? []);
+                  }}
+                  disabled={isBusy}
                 >
                   Restablecer formulario
                 </Button>
@@ -412,7 +511,7 @@ export function CaseEditor({
                     size="lg"
                     className="w-full justify-center"
                     onClick={handleDelete}
-                    disabled={isPending}
+                    disabled={isBusy}
                   >
                     Eliminar caso
                   </Button>
