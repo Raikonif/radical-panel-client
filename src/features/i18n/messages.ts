@@ -25,6 +25,10 @@ export const messages = {
       detail: "Detalle",
       delete: "Eliminar",
       availableIn: "en",
+      autoTranslationCreated:
+        "Se genero la traduccion automatica complementaria.",
+      autoTranslationFailed:
+        "El contenido se guardo, pero la traduccion automatica no se pudo crear.",
       languageNames: {
         es: "espanol",
         en: "ingles",
@@ -246,6 +250,10 @@ export const messages = {
       detail: "Detail",
       delete: "Delete",
       availableIn: "in",
+      autoTranslationCreated:
+        "The complementary automatic translation was created.",
+      autoTranslationFailed:
+        "The content was saved, but the automatic translation could not be created.",
       languageNames: {
         es: "Spanish",
         en: "English",

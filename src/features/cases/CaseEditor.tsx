@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
+import { ContentLanguageSwitch } from "@/components/workspace/ContentLanguageSwitch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,6 +53,7 @@ type CaseEditorProps = {
   mode: "create" | "edit";
   record: CaseRecord | null;
   language: ContentLanguage;
+  onLanguageChange: (language: ContentLanguage) => void;
   isPending: boolean;
   onSave: (values: CaseFormValues) => Promise<void>;
   onDelete?: () => Promise<void>;
@@ -85,6 +87,7 @@ export function CaseEditor({
   mode,
   record,
   language,
+  onLanguageChange,
   isPending,
   onSave,
   onDelete,
@@ -148,6 +151,12 @@ export function CaseEditor({
               {languageLabels[language].toLowerCase()}. Las otras traducciones
               se mantienen separadas.
             </CardDescription>
+            <div className="mt-4">
+              <ContentLanguageSwitch
+                value={language}
+                onChange={onLanguageChange}
+              />
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">

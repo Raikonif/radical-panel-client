@@ -9,7 +9,11 @@ import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/features/auth/useAuth";
 import { VideoDetails } from "@/features/videos/VideoDetails";
 import { VideoEditor } from "@/features/videos/VideoEditor";
-import { createVideo, deleteVideo, updateVideo } from "@/features/content/api";
+import { deleteVideo, updateVideo } from "@/features/content/api";
+import {
+  createVideoWithAutoTranslation,
+  type AutoTranslatedCreateResult,
+} from "@/features/content/auto-translation";
 import {
   contentQueryKeys,
   videosQueryOptions,
@@ -73,6 +77,7 @@ export function VideosPage() {
   const userId = user?.id ?? "";
   const [search, setSearch] = useState("");
   const [language, setLanguage] = useState<ContentLanguage>("es");
+  const [editorLanguage, setEditorLanguage] = useState<ContentLanguage>("es");
   const [modalState, setModalState] = useState<VideosModalState>({
     type: "closed",
   });
@@ -93,14 +98,17 @@ export function VideosPage() {
     : data;
 
   const saveMutation = useMutation({
-    mutationFn: (values: VideoFormValues) => {
+    mutationFn: async (values: VideoFormValues) => {
       if (modalState.type === "edit") {
-        return updateVideo(modalState.record.id, values);
+        return {
+          record: await updateVideo(modalState.record.id, values),
+          translationCreated: false,
+        };
       }
 
-      return createVideo(values, userId);
+      return createVideoWithAutoTranslation(values, userId);
     },
-    onSuccess: async () => {
+    onSuccess: async (result: AutoTranslatedCreateResult<VideoRecord>) => {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: contentQueryKeys.videos(userId),
@@ -114,6 +122,13 @@ export function VideosPage() {
           ? t.content.videos.saveUpdated
           : t.content.videos.saveCreated,
       );
+      if (modalState.type === "create") {
+        toast.success(
+          result.translationCreated
+            ? t.common.autoTranslationCreated
+            : t.common.autoTranslationFailed,
+        );
+      }
       setModalState({ type: "closed" });
     },
     onError: (mutationError) => {
@@ -201,7 +216,10 @@ export function VideosPage() {
         searchValue={search}
         searchPlaceholder={t.content.videos.searchPlaceholder}
         onSearchValueChange={setSearch}
-        onCreate={() => setModalState({ type: "create" })}
+        onCreate={() => {
+          setEditorLanguage("es");
+          setModalState({ type: "create" });
+        }}
         isLoading={isInitialLoading}
         toolbarSlot={
           <ContentLanguageSwitch value={language} onChange={setLanguage} />
@@ -226,7 +244,10 @@ export function VideosPage() {
           const record = filteredVideos.find((entry) => entry.id === item.id)!;
           return {
             onView: () => setModalState({ type: "view", record }),
-            onEdit: () => setModalState({ type: "edit", record }),
+            onEdit: () => {
+              setEditorLanguage(language);
+              setModalState({ type: "edit", record });
+            },
             onDelete: () => setModalState({ type: "delete", record }),
           };
         }}
@@ -248,9 +269,9 @@ export function VideosPage() {
         }
         description={
           modalState.type === "create"
-            ? `${t.common.create} ${t.common.translationLabel.toLowerCase()} ${language.toUpperCase()} del video.`
+            ? `${t.common.create} ${t.common.translationLabel.toLowerCase()} ${editorLanguage.toUpperCase()} del video.`
             : modalState.type === "edit"
-              ? `${t.common.edit} ${t.common.translationLabel.toLowerCase()} ${language.toUpperCase()} del video.`
+              ? `${t.common.edit} ${t.common.translationLabel.toLowerCase()} ${editorLanguage.toUpperCase()} del video.`
               : modalState.type === "view"
                 ? `${t.common.detail} ${t.common.translationLabel.toLowerCase()} ${language.toUpperCase()} del video.`
                 : modalState.type === "delete"
@@ -263,7 +284,8 @@ export function VideosPage() {
           <VideoEditor
             mode="create"
             record={null}
-            language={language}
+            language={editorLanguage}
+            onLanguageChange={setEditorLanguage}
             isPending={saveMutation.isPending}
             onSave={async (values) => {
               await saveMutation.mutateAsync(values);
@@ -274,7 +296,8 @@ export function VideosPage() {
           <VideoEditor
             mode="edit"
             record={modalState.record}
-            language={language}
+            language={editorLanguage}
+            onLanguageChange={setEditorLanguage}
             isPending={saveMutation.isPending}
             onSave={async (values) => {
               await saveMutation.mutateAsync(values);

@@ -9,11 +9,11 @@ import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/features/auth/useAuth";
 import { PodcastDetails } from "@/features/podcasts/PodcastDetails";
 import { PodcastEditor } from "@/features/podcasts/PodcastEditor";
+import { deletePodcast, updatePodcast } from "@/features/content/api";
 import {
-  createPodcast,
-  deletePodcast,
-  updatePodcast,
-} from "@/features/content/api";
+  createPodcastWithAutoTranslation,
+  type AutoTranslatedCreateResult,
+} from "@/features/content/auto-translation";
 import {
   contentQueryKeys,
   podcastsQueryOptions,
@@ -78,6 +78,7 @@ export function PodcastsPage() {
   const userId = user?.id ?? "";
   const [search, setSearch] = useState("");
   const [language, setLanguage] = useState<ContentLanguage>("es");
+  const [editorLanguage, setEditorLanguage] = useState<ContentLanguage>("es");
   const [modalState, setModalState] = useState<PodcastsModalState>({
     type: "closed",
   });
@@ -98,14 +99,17 @@ export function PodcastsPage() {
     : data;
 
   const saveMutation = useMutation({
-    mutationFn: (values: PodcastFormValues) => {
+    mutationFn: async (values: PodcastFormValues) => {
       if (modalState.type === "edit") {
-        return updatePodcast(modalState.record.id, values);
+        return {
+          record: await updatePodcast(modalState.record.id, values),
+          translationCreated: false,
+        };
       }
 
-      return createPodcast(values, userId);
+      return createPodcastWithAutoTranslation(values, userId);
     },
-    onSuccess: async () => {
+    onSuccess: async (result: AutoTranslatedCreateResult<PodcastRecord>) => {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: contentQueryKeys.podcasts(userId),
@@ -119,6 +123,13 @@ export function PodcastsPage() {
           ? t.content.podcasts.saveUpdated
           : t.content.podcasts.saveCreated,
       );
+      if (modalState.type === "create") {
+        toast.success(
+          result.translationCreated
+            ? t.common.autoTranslationCreated
+            : t.common.autoTranslationFailed,
+        );
+      }
       setModalState({ type: "closed" });
     },
     onError: (mutationError) => {
@@ -204,7 +215,10 @@ export function PodcastsPage() {
         searchValue={search}
         searchPlaceholder={t.content.podcasts.searchPlaceholder}
         onSearchValueChange={setSearch}
-        onCreate={() => setModalState({ type: "create" })}
+        onCreate={() => {
+          setEditorLanguage("es");
+          setModalState({ type: "create" });
+        }}
         isLoading={isInitialLoading}
         toolbarSlot={
           <ContentLanguageSwitch value={language} onChange={setLanguage} />
@@ -231,7 +245,10 @@ export function PodcastsPage() {
           )!;
           return {
             onView: () => setModalState({ type: "view", record }),
-            onEdit: () => setModalState({ type: "edit", record }),
+            onEdit: () => {
+              setEditorLanguage(language);
+              setModalState({ type: "edit", record });
+            },
             onDelete: () => setModalState({ type: "delete", record }),
           };
         }}
@@ -253,9 +270,9 @@ export function PodcastsPage() {
         }
         description={
           modalState.type === "create"
-            ? `${t.common.create} ${t.common.translationLabel.toLowerCase()} ${language.toUpperCase()} del episodio.`
+            ? `${t.common.create} ${t.common.translationLabel.toLowerCase()} ${editorLanguage.toUpperCase()} del episodio.`
             : modalState.type === "edit"
-              ? `${t.common.edit} ${t.common.translationLabel.toLowerCase()} ${language.toUpperCase()} del episodio.`
+              ? `${t.common.edit} ${t.common.translationLabel.toLowerCase()} ${editorLanguage.toUpperCase()} del episodio.`
               : modalState.type === "view"
                 ? `${t.common.detail} ${t.common.translationLabel.toLowerCase()} ${language.toUpperCase()} del episodio.`
                 : modalState.type === "delete"
@@ -268,7 +285,8 @@ export function PodcastsPage() {
           <PodcastEditor
             mode="create"
             record={null}
-            language={language}
+            language={editorLanguage}
+            onLanguageChange={setEditorLanguage}
             isPending={saveMutation.isPending}
             onSave={async (values) => {
               await saveMutation.mutateAsync(values);
@@ -279,7 +297,8 @@ export function PodcastsPage() {
           <PodcastEditor
             mode="edit"
             record={modalState.record}
-            language={language}
+            language={editorLanguage}
+            onLanguageChange={setEditorLanguage}
             isPending={saveMutation.isPending}
             onSave={async (values) => {
               await saveMutation.mutateAsync(values);

@@ -1,5 +1,4 @@
 import { useDeferredValue, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ContentLanguageSwitch } from "@/components/workspace/ContentLanguageSwitch";
 import { ResourceListPanel } from "@/components/workspace/ResourceListPanel";
@@ -9,11 +8,7 @@ import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/features/auth/useAuth";
 import { CaseDetails } from "@/features/cases/CaseDetails";
 import { CaseEditor } from "@/features/cases/CaseEditor";
-import { createCase, deleteCase, updateCase } from "@/features/content/api";
-import {
-  casesQueryOptions,
-  contentQueryKeys,
-} from "@/features/content/queries";
+import { useCasesCrud } from "@/features/cases/useCasesCrud";
 import { formatDate, getCaseTranslation } from "@/features/content/types";
 import type {
   CaseFormValues,
@@ -72,10 +67,10 @@ function matchesCase(
 export function CasesPage() {
   const { user } = useAuth();
   const { t } = useUiLanguage();
-  const queryClient = useQueryClient();
   const userId = user?.id ?? "";
   const [search, setSearch] = useState("");
   const [language, setLanguage] = useState<ContentLanguage>("es");
+  const [editorLanguage, setEditorLanguage] = useState<ContentLanguage>("es");
   const [modalState, setModalState] = useState<CasesModalState>({
     type: "closed",
   });
@@ -85,71 +80,66 @@ export function CasesPage() {
     data = [],
     isPending,
     error,
-  } = useQuery({
-    ...casesQueryOptions(userId),
-    enabled: Boolean(userId),
-  });
+    createCaseMutation,
+    updateCaseMutation,
+    deleteCaseMutation,
+  } = useCasesCrud(userId);
   const isInitialLoading = isPending && data.length === 0;
 
   const filteredCases = deferredSearch
     ? data.filter((record) => matchesCase(record, deferredSearch, language))
     : data;
 
-  const saveMutation = useMutation({
-    mutationFn: (values: CaseFormValues) => {
-      if (modalState.type === "edit") {
-        return updateCase(modalState.record.id, values);
-      }
+  const isSavingCase =
+    createCaseMutation.isPending || updateCaseMutation.isPending;
+  const isDeletingCase = deleteCaseMutation.isPending;
 
-      return createCase(values, userId);
-    },
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: contentQueryKeys.cases(userId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: contentQueryKeys.dashboard(userId),
-        }),
-      ]);
+  async function handleCreateCase(values: CaseFormValues) {
+    try {
+      const result = await createCaseMutation.mutateAsync(values);
+      toast.success(t.content.cases.saveCreated);
       toast.success(
-        modalState.type === "edit"
-          ? t.content.cases.saveUpdated
-          : t.content.cases.saveCreated,
+        result.translationCreated
+          ? t.common.autoTranslationCreated
+          : t.common.autoTranslationFailed,
       );
       setModalState({ type: "closed" });
-    },
-    onError: (mutationError) => {
+    } catch (mutationError) {
       toast.error(
         mutationError instanceof Error
           ? mutationError.message
           : t.content.cases.saveError,
       );
-    },
-  });
+    }
+  }
 
-  const deleteMutation = useMutation({
-    mutationFn: (record: CaseRecord) => deleteCase(record.id),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: contentQueryKeys.cases(userId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: contentQueryKeys.dashboard(userId),
-        }),
-      ]);
+  async function handleUpdateCase(record: CaseRecord, values: CaseFormValues) {
+    try {
+      await updateCaseMutation.mutateAsync({ record, values });
+      toast.success(t.content.cases.saveUpdated);
+      setModalState({ type: "closed" });
+    } catch (mutationError) {
+      toast.error(
+        mutationError instanceof Error
+          ? mutationError.message
+          : t.content.cases.saveError,
+      );
+    }
+  }
+
+  async function handleDeleteCase(record: CaseRecord) {
+    try {
+      await deleteCaseMutation.mutateAsync(record);
       toast.success(t.content.cases.deleteSuccess);
       setModalState({ type: "closed" });
-    },
-    onError: (mutationError) => {
+    } catch (mutationError) {
       toast.error(
         mutationError instanceof Error
           ? mutationError.message
           : t.content.cases.deleteError,
       );
-    },
-  });
+    }
+  }
 
   const items = filteredCases.map((record) => {
     const translation = getCaseTranslation(record, language);
@@ -209,7 +199,10 @@ export function CasesPage() {
         searchValue={search}
         searchPlaceholder={t.content.cases.searchPlaceholder}
         onSearchValueChange={setSearch}
-        onCreate={() => setModalState({ type: "create" })}
+        onCreate={() => {
+          setEditorLanguage("es");
+          setModalState({ type: "create" });
+        }}
         isLoading={isInitialLoading}
         toolbarSlot={
           <ContentLanguageSwitch value={language} onChange={setLanguage} />
@@ -239,7 +232,10 @@ export function CasesPage() {
           const record = filteredCases.find((entry) => entry.id === item.id)!;
           return {
             onView: () => setModalState({ type: "view", record }),
-            onEdit: () => setModalState({ type: "edit", record }),
+            onEdit: () => {
+              setEditorLanguage(language);
+              setModalState({ type: "edit", record });
+            },
             onDelete: () => setModalState({ type: "delete", record }),
           };
         }}
@@ -261,9 +257,9 @@ export function CasesPage() {
         }
         description={
           modalState.type === "create"
-            ? `${t.common.create} ${t.common.translationLabel.toLowerCase()} ${t.common.availableIn} ${t.common.languageNames[language]}.`
+            ? `${t.common.create} ${t.common.translationLabel.toLowerCase()} ${t.common.availableIn} ${t.common.languageNames[editorLanguage]}.`
             : modalState.type === "edit"
-              ? `${t.common.edit} ${t.common.translationLabel.toLowerCase()} ${language.toUpperCase()} sin salir de la lista.`
+              ? `${t.common.edit} ${t.common.translationLabel.toLowerCase()} ${editorLanguage.toUpperCase()} sin salir de la lista.`
               : modalState.type === "view"
                 ? `${t.common.detail} ${t.common.translationLabel.toLowerCase()} ${language.toUpperCase()} del caso.`
                 : modalState.type === "delete"
@@ -276,21 +272,24 @@ export function CasesPage() {
           <CaseEditor
             mode="create"
             record={null}
-            language={language}
-            isPending={saveMutation.isPending}
-            onSave={async (values) => {
-              await saveMutation.mutateAsync(values);
-            }}
+            language={editorLanguage}
+            onLanguageChange={setEditorLanguage}
+            isPending={isSavingCase}
+            onSave={handleCreateCase}
           />
         ) : null}
         {modalState.type === "edit" ? (
           <CaseEditor
             mode="edit"
             record={modalState.record}
-            language={language}
-            isPending={saveMutation.isPending}
+            language={editorLanguage}
+            onLanguageChange={setEditorLanguage}
+            isPending={isSavingCase || isDeletingCase}
             onSave={async (values) => {
-              await saveMutation.mutateAsync(values);
+              await handleUpdateCase(modalState.record, values);
+            }}
+            onDelete={async () => {
+              await handleDeleteCase(modalState.record);
             }}
           />
         ) : null}
@@ -320,12 +319,10 @@ export function CasesPage() {
               <Button
                 type="button"
                 variant="destructive"
-                onClick={() =>
-                  void deleteMutation.mutateAsync(modalState.record)
-                }
-                disabled={deleteMutation.isPending}
+                onClick={() => void handleDeleteCase(modalState.record)}
+                disabled={isDeletingCase}
               >
-                {deleteMutation.isPending
+                {isDeletingCase
                   ? t.common.deleting
                   : t.content.modal.deleteCase}
               </Button>

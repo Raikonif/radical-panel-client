@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
+import { ContentLanguageSwitch } from "@/components/workspace/ContentLanguageSwitch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +45,7 @@ type VideoEditorProps = {
   mode: "create" | "edit";
   record: VideoRecord | null;
   language: ContentLanguage;
+  onLanguageChange: (language: ContentLanguage) => void;
   isPending: boolean;
   onSave: (values: VideoFormValues) => Promise<void>;
   onDelete?: () => Promise<void>;
@@ -70,6 +72,7 @@ export function VideoEditor({
   mode,
   record,
   language,
+  onLanguageChange,
   isPending,
   onSave,
   onDelete,
@@ -127,6 +130,12 @@ export function VideoEditor({
               Solo se edita la ficha en {languageLabels[language].toLowerCase()}
               . Las otras traducciones quedan intactas.
             </CardDescription>
+            <div className="mt-4">
+              <ContentLanguageSwitch
+                value={language}
+                onChange={onLanguageChange}
+              />
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">

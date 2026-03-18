@@ -405,6 +405,19 @@ async function fetchPodcastById(podcastId: number) {
   );
 }
 
+async function touchRecord(
+  table: "cases" | "videos" | "podcasts",
+  recordId: number,
+  timestamp: string,
+) {
+  const { error } = await getSupabaseClient()
+    .from(table)
+    .update({ updated_at: timestamp })
+    .eq("id", recordId);
+
+  ensureNoError(error);
+}
+
 async function writeCaseChildren(
   caseId: number,
   payload: CaseFormValues,
@@ -653,6 +666,24 @@ export async function createCase(payload: CaseFormValues, userId: string) {
   return fetchCaseById(caseId);
 }
 
+export async function getCaseById(caseId: number) {
+  return fetchCaseById(caseId);
+}
+
+export async function saveCaseTranslation(
+  caseId: number,
+  translation: CaseFormValues["translation"],
+) {
+  const timestamp = new Date().toISOString();
+
+  await Promise.all([
+    touchRecord("cases", caseId, timestamp),
+    upsertCaseTranslation(caseId, translation, timestamp),
+  ]);
+
+  return fetchCaseById(caseId);
+}
+
 export async function updateCase(caseId: number, payload: CaseFormValues) {
   const client = getSupabaseClient();
   const timestamp = new Date().toISOString();
@@ -731,6 +762,24 @@ export async function createVideo(payload: VideoFormValues, userId: string) {
 
   const videoId = (data as { id: number }).id;
   await upsertVideoTranslation(videoId, payload.translation, timestamp);
+
+  return fetchVideoById(videoId);
+}
+
+export async function getVideoById(videoId: number) {
+  return fetchVideoById(videoId);
+}
+
+export async function saveVideoTranslation(
+  videoId: number,
+  translation: VideoFormValues["translation"],
+) {
+  const timestamp = new Date().toISOString();
+
+  await Promise.all([
+    touchRecord("videos", videoId, timestamp),
+    upsertVideoTranslation(videoId, translation, timestamp),
+  ]);
 
   return fetchVideoById(videoId);
 }
@@ -818,6 +867,24 @@ export async function createPodcast(
 
   const podcastId = (data as { id: number }).id;
   await upsertPodcastTranslation(podcastId, payload.translation, timestamp);
+
+  return fetchPodcastById(podcastId);
+}
+
+export async function getPodcastById(podcastId: number) {
+  return fetchPodcastById(podcastId);
+}
+
+export async function savePodcastTranslation(
+  podcastId: number,
+  translation: PodcastFormValues["translation"],
+) {
+  const timestamp = new Date().toISOString();
+
+  await Promise.all([
+    touchRecord("podcasts", podcastId, timestamp),
+    upsertPodcastTranslation(podcastId, translation, timestamp),
+  ]);
 
   return fetchPodcastById(podcastId);
 }

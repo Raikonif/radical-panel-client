@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
+import { ContentLanguageSwitch } from "@/components/workspace/ContentLanguageSwitch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +51,7 @@ type PodcastEditorProps = {
   mode: "create" | "edit";
   record: PodcastRecord | null;
   language: ContentLanguage;
+  onLanguageChange: (language: ContentLanguage) => void;
   isPending: boolean;
   onSave: (values: PodcastFormValues) => Promise<void>;
   onDelete?: () => Promise<void>;
@@ -79,6 +81,7 @@ export function PodcastEditor({
   mode,
   record,
   language,
+  onLanguageChange,
   isPending,
   onSave,
   onDelete,
@@ -146,6 +149,12 @@ export function PodcastEditor({
               Edita el episodio en {languageLabels[language].toLowerCase()} sin
               tocar las otras traducciones.
             </CardDescription>
+            <div className="mt-4">
+              <ContentLanguageSwitch
+                value={language}
+                onChange={onLanguageChange}
+              />
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
