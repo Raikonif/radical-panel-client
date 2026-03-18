@@ -719,13 +719,12 @@ export async function updateCase(
 }
 
 export async function deleteCase(caseId: number) {
-  const { error } = await getSupabaseClient().functions.invoke("delete-case", {
-    body: { caseId },
-  });
+  const { error } = await getSupabaseClient()
+    .from("cases")
+    .delete()
+    .eq("id", caseId);
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  ensureNoError(error);
 }
 
 export async function listVideos(userId: string) {
