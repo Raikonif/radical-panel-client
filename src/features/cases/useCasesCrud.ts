@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { deleteCase, updateCase } from "@/features/content/api";
 import {
   createCaseWithAutoTranslation,
+  type AutoTranslatedSaveResult,
+  updateCaseWithAutoTranslation,
   type AutoTranslatedCreateResult,
 } from "@/features/content/auto-translation";
+import { deleteCase } from "@/features/content/api";
 import {
   casesQueryOptions,
   contentQueryKeys,
@@ -136,8 +138,11 @@ export function useCasesCrud(userId: string) {
 
   const updateCaseMutation = useMutation({
     mutationFn: ({ record, values }: UpdateCaseInput) =>
-      updateCase(record.id, values, userId),
-    onSuccess: (nextRecord, { record }) => {
+      updateCaseWithAutoTranslation(record.id, values, userId),
+    onSuccess: (
+      { record: nextRecord }: AutoTranslatedSaveResult<CaseRecord>,
+      { record },
+    ) => {
       queryClient.setQueryData<CaseRecord[]>(casesKey, (records = []) =>
         upsertCaseRecord(records, nextRecord),
       );

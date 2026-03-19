@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_PUBLISHABLE_KEY?: string;
   readonly VITE_UPLOAD_API_BASE_URL?: string;
   readonly VITE_UPLOAD_PUBLIC_BASE_URL?: string;
+  readonly VITE_DEEPL_API_KEY?: string;
+  readonly VITE_DEEPL_API_URL?: string;
 }
 
 interface ImportMeta {

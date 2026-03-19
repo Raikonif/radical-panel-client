@@ -28,6 +28,9 @@ export type AutoTranslatedCreateResult<TRecord> = {
   translationCreated: boolean;
 };
 
+export type AutoTranslatedSaveResult<TRecord> =
+  AutoTranslatedCreateResult<TRecord>;
+
 function buildTranslationContext(parts: Array<string>) {
   return parts
     .map((part) => part.trim())
@@ -134,6 +137,29 @@ export async function createCaseWithAutoTranslation(
   }
 }
 
+export async function updateCaseWithAutoTranslation(
+  caseId: number,
+  payload: CaseFormValues,
+  userId: string,
+): Promise<AutoTranslatedSaveResult<CaseRecord>> {
+  const record = await updateCase(caseId, payload, userId);
+
+  try {
+    const translation = await translateCasePayload(payload);
+    return {
+      record: await saveCaseTranslation(caseId, translation, userId),
+      translationCreated: true,
+    };
+  } catch (error) {
+    console.error("Unable to auto-translate case", error);
+
+    return {
+      record,
+      translationCreated: false,
+    };
+  }
+}
+
 export async function createVideoWithAutoTranslation(
   payload: VideoFormValues,
   userId: string,
@@ -158,6 +184,29 @@ export async function createVideoWithAutoTranslation(
   }
 }
 
+export async function updateVideoWithAutoTranslation(
+  videoId: number,
+  payload: VideoFormValues,
+  userId: string,
+): Promise<AutoTranslatedSaveResult<VideoRecord>> {
+  const record = await updateVideo(videoId, payload, userId);
+
+  try {
+    const translation = await translateVideoPayload(payload);
+    return {
+      record: await saveVideoTranslation(videoId, translation, userId),
+      translationCreated: true,
+    };
+  } catch (error) {
+    console.error("Unable to auto-translate video", error);
+
+    return {
+      record,
+      translationCreated: false,
+    };
+  }
+}
+
 export async function createPodcastWithAutoTranslation(
   payload: PodcastFormValues,
   userId: string,
@@ -170,6 +219,29 @@ export async function createPodcastWithAutoTranslation(
 
     return {
       record: await getPodcastById(record.id),
+      translationCreated: true,
+    };
+  } catch (error) {
+    console.error("Unable to auto-translate podcast", error);
+
+    return {
+      record,
+      translationCreated: false,
+    };
+  }
+}
+
+export async function updatePodcastWithAutoTranslation(
+  podcastId: number,
+  payload: PodcastFormValues,
+  userId: string,
+): Promise<AutoTranslatedSaveResult<PodcastRecord>> {
+  const record = await updatePodcast(podcastId, payload, userId);
+
+  try {
+    const translation = await translatePodcastPayload(payload);
+    return {
+      record: await savePodcastTranslation(podcastId, translation, userId),
       translationCreated: true,
     };
   } catch (error) {

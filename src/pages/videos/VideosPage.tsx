@@ -9,11 +9,13 @@ import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/features/auth/useAuth";
 import { VideoDetails } from "@/features/videos/VideoDetails";
 import { VideoEditor } from "@/features/videos/VideoEditor";
-import { deleteVideo, updateVideo } from "@/features/content/api";
 import {
   createVideoWithAutoTranslation,
+  updateVideoWithAutoTranslation,
+  type AutoTranslatedSaveResult,
   type AutoTranslatedCreateResult,
 } from "@/features/content/auto-translation";
+import { deleteVideo } from "@/features/content/api";
 import {
   contentQueryKeys,
   videosQueryOptions,
@@ -100,15 +102,20 @@ export function VideosPage() {
   const saveMutation = useMutation({
     mutationFn: async (values: VideoFormValues) => {
       if (modalState.type === "edit") {
-        return {
-          record: await updateVideo(modalState.record.id, values, userId),
-          translationCreated: false,
-        };
+        return updateVideoWithAutoTranslation(
+          modalState.record.id,
+          values,
+          userId,
+        );
       }
 
       return createVideoWithAutoTranslation(values, userId);
     },
-    onSuccess: async (result: AutoTranslatedCreateResult<VideoRecord>) => {
+    onSuccess: async (
+      result:
+        | AutoTranslatedCreateResult<VideoRecord>
+        | AutoTranslatedSaveResult<VideoRecord>,
+    ) => {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: contentQueryKeys.videos(userId),
@@ -122,13 +129,11 @@ export function VideosPage() {
           ? t.content.videos.saveUpdated
           : t.content.videos.saveCreated,
       );
-      if (modalState.type === "create") {
-        toast.success(
-          result.translationCreated
-            ? t.common.autoTranslationCreated
-            : t.common.autoTranslationFailed,
-        );
-      }
+      toast.success(
+        result.translationCreated
+          ? t.common.autoTranslationCreated
+          : t.common.autoTranslationFailed,
+      );
       setModalState({ type: "closed" });
     },
     onError: (mutationError) => {

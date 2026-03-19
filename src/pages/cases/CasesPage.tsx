@@ -115,8 +115,13 @@ export function CasesPage() {
 
   async function handleUpdateCase(record: CaseRecord, values: CaseFormValues) {
     try {
-      await updateCaseMutation.mutateAsync({ record, values });
+      const result = await updateCaseMutation.mutateAsync({ record, values });
       toast.success(t.content.cases.saveUpdated);
+      toast.success(
+        result.translationCreated
+          ? t.common.autoTranslationCreated
+          : t.common.autoTranslationFailed,
+      );
       setModalState({ type: "closed" });
     } catch (mutationError) {
       toast.error(

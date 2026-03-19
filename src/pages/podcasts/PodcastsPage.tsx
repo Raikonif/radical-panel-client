@@ -9,11 +9,13 @@ import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/features/auth/useAuth";
 import { PodcastDetails } from "@/features/podcasts/PodcastDetails";
 import { PodcastEditor } from "@/features/podcasts/PodcastEditor";
-import { deletePodcast, updatePodcast } from "@/features/content/api";
 import {
   createPodcastWithAutoTranslation,
+  updatePodcastWithAutoTranslation,
+  type AutoTranslatedSaveResult,
   type AutoTranslatedCreateResult,
 } from "@/features/content/auto-translation";
+import { deletePodcast } from "@/features/content/api";
 import {
   contentQueryKeys,
   podcastsQueryOptions,
@@ -101,15 +103,20 @@ export function PodcastsPage() {
   const saveMutation = useMutation({
     mutationFn: async (values: PodcastFormValues) => {
       if (modalState.type === "edit") {
-        return {
-          record: await updatePodcast(modalState.record.id, values, userId),
-          translationCreated: false,
-        };
+        return updatePodcastWithAutoTranslation(
+          modalState.record.id,
+          values,
+          userId,
+        );
       }
 
       return createPodcastWithAutoTranslation(values, userId);
     },
-    onSuccess: async (result: AutoTranslatedCreateResult<PodcastRecord>) => {
+    onSuccess: async (
+      result:
+        | AutoTranslatedCreateResult<PodcastRecord>
+        | AutoTranslatedSaveResult<PodcastRecord>,
+    ) => {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: contentQueryKeys.podcasts(userId),
@@ -123,13 +130,11 @@ export function PodcastsPage() {
           ? t.content.podcasts.saveUpdated
           : t.content.podcasts.saveCreated,
       );
-      if (modalState.type === "create") {
-        toast.success(
-          result.translationCreated
-            ? t.common.autoTranslationCreated
-            : t.common.autoTranslationFailed,
-        );
-      }
+      toast.success(
+        result.translationCreated
+          ? t.common.autoTranslationCreated
+          : t.common.autoTranslationFailed,
+      );
       setModalState({ type: "closed" });
     },
     onError: (mutationError) => {
