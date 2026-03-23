@@ -46,6 +46,8 @@ export function getAlternateContentLanguage(
   return language === "es" ? "en" : "es";
 }
 
+// Automatic translation is client -> DeepL for now.
+// There is no deployed Supabase edge-function dependency in this runtime path.
 export async function translateTexts({
   sourceLanguage,
   targetLanguage,

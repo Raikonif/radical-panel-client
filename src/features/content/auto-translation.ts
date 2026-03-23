@@ -8,6 +8,9 @@ import {
   saveCaseTranslation,
   savePodcastTranslation,
   saveVideoTranslation,
+  updateCase,
+  updatePodcast,
+  updateVideo,
 } from "@/features/content/api";
 import { slugify } from "@/features/content/types";
 import type {
@@ -37,6 +40,9 @@ function buildTranslationContext(parts: Array<string>) {
     .filter(Boolean)
     .join("\n\n");
 }
+
+// The automatic complementary translation currently runs directly against DeepL.
+// Do not re-route this flow through a Supabase edge function until that backend exists.
 
 async function translateCasePayload(payload: CaseFormValues) {
   const targetLanguage = getAlternateContentLanguage(

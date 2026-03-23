@@ -1,3 +1,5 @@
+// Placeholder for a future Supabase edge-function translation proxy.
+// The current app runtime does not use this file; automatic translation goes directly to DeepL.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":

@@ -6,6 +6,7 @@ import {
   type AutoTranslatedCreateResult,
 } from "@/features/content/auto-translation";
 import { deleteCase } from "@/features/content/api";
+import { deleteMediaFiles } from "@/features/content/upload";
 import {
   casesQueryOptions,
   contentQueryKeys,
@@ -106,6 +107,23 @@ function removeCaseFromDashboard(
   };
 }
 
+function getRemovedCaseImageUrls(
+  previousRecord: CaseRecord,
+  nextRecord: CaseRecord,
+) {
+  const nextImageUrls = new Set(
+    nextRecord.images
+      .map((image) => image.image_url.trim())
+      .filter((imageUrl) => imageUrl.length > 0),
+  );
+
+  return previousRecord.images
+    .map((image) => image.image_url.trim())
+    .filter(
+      (imageUrl) => imageUrl.length > 0 && !nextImageUrls.has(imageUrl),
+    );
+}
+
 type UpdateCaseInput = {
   record: CaseRecord;
   values: CaseFormValues;
@@ -137,8 +155,24 @@ export function useCasesCrud(userId: string) {
   });
 
   const updateCaseMutation = useMutation({
-    mutationFn: ({ record, values }: UpdateCaseInput) =>
-      updateCaseWithAutoTranslation(record.id, values, userId),
+    mutationFn: async ({ record, values }: UpdateCaseInput) => {
+      const result = await updateCaseWithAutoTranslation(
+        record.id,
+        values,
+        userId,
+      );
+      const removedImageUrls = getRemovedCaseImageUrls(record, result.record);
+
+      if (removedImageUrls.length > 0) {
+        try {
+          await deleteMediaFiles(removedImageUrls);
+        } catch (error) {
+          console.error("Unable to delete replaced case images", error);
+        }
+      }
+
+      return result;
+    },
     onSuccess: (
       { record: nextRecord }: AutoTranslatedSaveResult<CaseRecord>,
       { record },
@@ -155,7 +189,10 @@ export function useCasesCrud(userId: string) {
   });
 
   const deleteCaseMutation = useMutation({
-    mutationFn: (record: CaseRecord) => deleteCase(record.id),
+    mutationFn: async (record: CaseRecord) => {
+      await deleteMediaFiles(record.images.map((image) => image.image_url));
+      await deleteCase(record.id);
+    },
     onMutate: async (record) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: casesKey }),
